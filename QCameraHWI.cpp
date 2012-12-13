@@ -1082,7 +1082,9 @@ status_t QCameraHardwareInterface::startPreview2()
         if (mHasAutoFocusSupport) {
             int cafSupport = true;
             int caf_type = 2;
+#ifdef FAST_AF
             native_set_parms(MM_CAMERA_PARM_CAF_TYPE, sizeof(caf_type), (void *)&caf_type);
+#endif
             native_set_parms(MM_CAMERA_PARM_CONTINUOUS_AF, sizeof(cafSupport),
                                    (void *)&cafSupport);
         }
@@ -1091,7 +1093,9 @@ status_t QCameraHardwareInterface::startPreview2()
      if (mHasAutoFocusSupport && strcmp(str, "auto")) {
          int cafSupport = true;
          int caf_type = 2;
+#ifdef FAST_AF
          native_set_parms(MM_CAMERA_PARM_CAF_TYPE, sizeof(caf_type), (void *)&caf_type);
+#endif
          native_set_parms(MM_CAMERA_PARM_CONTINUOUS_AF, sizeof(cafSupport),
                                (void *)&cafSupport);
      }
