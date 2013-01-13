@@ -14,13 +14,13 @@ ifneq ($(USE_CAMERA_STUB),true)
       LOCAL_CFLAGS:= -DDLOPEN_LIBMMCAMERA=$(DLOPEN_LIBMMCAMERA)
 
       #define BUILD_UNIFIED_CODE
-      ifeq ($(TARGET_BOARD_PLATFORM),msm7627a)
+      ifeq ($(TARGET_BOARD_PLATFORM),msm7x27a)
         BUILD_UNIFIED_CODE := true
       else
         BUILD_UNIFIED_CODE := false
       endif
 
-      ifeq ($(TARGET_BOARD_PLATFORM),msm7627a)
+      ifeq ($(TARGET_BOARD_PLATFORM),msm7x27a)
         LOCAL_CFLAGS+= -DVFE_7X27A
       endif
 
@@ -49,7 +49,7 @@ ifneq ($(USE_CAMERA_STUB),true)
       endif
 
       ifeq ($(V4L2_BASED_LIBCAM),true)
-        ifeq ($(TARGET_BOARD_PLATFORM),msm7627a)
+        ifeq ($(TARGET_BOARD_PLATFORM),msm7x27a)
           LOCAL_HAL_FILES := QCameraHAL.cpp QCameraHWI_Parm.cpp\
             QCameraHWI.cpp QCameraHWI_Preview.cpp \
             QCameraHWI_Record_7x27A.cpp QCameraHWI_Still.cpp \
@@ -79,7 +79,7 @@ ifneq ($(USE_CAMERA_STUB),true)
 
       LOCAL_SRC_FILES := $(MM_CAM_FILES) $(LOCAL_HAL_FILES)
 
-      ifeq ($(TARGET_BOARD_PLATFORM),msm7627a)
+      ifeq ($(TARGET_BOARD_PLATFORM),msm7x27a)
         LOCAL_CFLAGS+= -DNUM_PREVIEW_BUFFERS=6 -D_ANDROID_
       else
         LOCAL_CFLAGS+= -DNUM_PREVIEW_BUFFERS=4 -D_ANDROID_
