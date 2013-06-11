@@ -131,28 +131,34 @@ static thumbnail_size_type thumbnail_sizes[] = {
 };
 
 static struct camera_size_type zsl_picture_sizes[] = {
+  { 1920, 1088}, // 2.1MP for the One
+  { 1920, 1080}, // 2.1MP
   { 1280, 960}, // 1.3MP
-  { 800, 600}, //SVGA
+  { 800, 600}, // SVGA
   { 800, 480}, // WVGA
   { 640, 480}, // VGA
-  { 352, 288}, //CIF
+  { 352, 288}, // CIF
   { 320, 240}, // QVGA
   { 176, 144} // QCIF
 };
 
 static camera_size_type default_picture_sizes[] = {
+  { 4208, 3120}, // 13MP
+  { 4128, 3096}, // 12.8MP
   { 4000, 3000}, // 12MP
+  { 3920, 2940}, // 11.5MP
   { 3264, 2448}, // 8MP
   { 3264, 1836}, // Picture Size to match 1080p,720p AR
   { 3264, 2176}, // Picture Size to match 480p AR
   { 2592, 1944}, // 5MP
+  { 2688, 1520}, // 4.1MP
   { 2048, 1536}, // 3MP QXGA
   { 1920, 1080}, // HD1080
   { 1600, 1200}, // 2MP UXGA
   { 1280, 960}, // 1.3MP
-  { 1280, 720},
-  { 720, 480},
+  { 1280, 720}, // 0.9MP
   { 800, 480}, // WVGA
+  { 720, 480}, // 0.3MP
   { 640, 480}, // VGA
   { 352, 288}, // CIF
   { 320, 240}, // QVGA
