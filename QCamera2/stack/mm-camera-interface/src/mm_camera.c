@@ -677,7 +677,7 @@ int32_t mm_camera_start_zsl_snapshot(mm_camera_obj_t *my_obj)
 int32_t mm_camera_stop_zsl_snapshot(mm_camera_obj_t *my_obj)
 {
     int32_t rc = -1;
-    int32_t value;
+    int32_t value = 0;
     rc = mm_camera_util_s_ctrl(my_obj->ctrl_fd,
              CAM_PRIV_STOP_ZSL_SNAPSHOT, &value);
     pthread_mutex_unlock(&my_obj->cam_lock);
