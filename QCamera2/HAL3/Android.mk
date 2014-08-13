@@ -27,9 +27,15 @@ LOCAL_C_INCLUDES := \
         $(LOCAL_PATH)/../../mm-image-codec/qomx_core \
         $(LOCAL_PATH)/../util
 
+ifneq ($(TARGET_QCOM_DISPLAY_VARIANT),)
+DISPLAY := display-$(TARGET_QCOM_DISPLAY_VARIANT)
+else
+DISPLAY := display/msm8974
+endif
+
 ifneq ($(filter msm8974 msm8x74,$(TARGET_BOARD_PLATFORM)),)
 LOCAL_C_INCLUDES += \
-        hardware/qcom/display/msm8974/libgralloc
+        hardware/qcom/$(DISPLAY)/libgralloc
 else
 LOCAL_C_INCLUDES += \
         hardware/qcom/display/msm8960/libgralloc
