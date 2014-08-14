@@ -21,22 +21,33 @@ LOCAL_CFLAGS = -Wall -Werror -DDEFAULT_ZSL_MODE_ON -DDEFAULT_DENOISE_MODE_ON
 #Debug logs are enabled
 #LOCAL_CFLAGS += -DDISABLE_DEBUG_LOG
 
+ifneq ($(TARGET_QCOM_MEDIA_VARIANT),)
+MEDIA := media-$(TARGET_QCOM_MEDIA_VARIANT)
+else
+MEDIA := media
+endif
+
 LOCAL_C_INCLUDES := \
         $(LOCAL_PATH)/../stack/common \
         frameworks/native/include/media/hardware \
         frameworks/native/include/media/openmax \
-        hardware/qcom/media/libstagefrighthw \
+        hardware/qcom/$(MEDIA)/libstagefrighthw \
         $(LOCAL_PATH)/../../mm-image-codec/qexif \
         $(LOCAL_PATH)/../../mm-image-codec/qomx_core \
         $(LOCAL_PATH)/../util
 
-ifneq ($(filter msm8974 msm8x74,$(TARGET_BOARD_PLATFORM)),)
-LOCAL_C_INCLUDES += \
-        hardware/qcom/display/msm8974/libgralloc
+ifneq ($(TARGET_QCOM_DISPLAY_VARIANT),)
+DISPLAY := display-$(TARGET_QCOM_DISPLAY_VARIANT)
 else
-LOCAL_C_INCLUDES += \
-        hardware/qcom/display/msm8960/libgralloc
+ifneq ($(filter msm8974 msm8x74,$(TARGET_BOARD_PLATFORM)),)
+DISPLAY := display/msm8974
+else
+DISPLAY := display/msm8960
 endif
+endif
+
+LOCAL_C_INCLUDES += \
+        hardware/qcom/$(DISPLAY)/libgralloc
 
 LOCAL_SHARED_LIBRARIES := libcamera_client liblog libhardware libutils libcutils libdl
 LOCAL_SHARED_LIBRARIES += libmmcamera_interface libmmjpeg_interface

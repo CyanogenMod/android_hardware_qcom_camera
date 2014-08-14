@@ -28,7 +28,13 @@ LOCAL_C_INCLUDES := \
     $(LOCAL_PATH)/inc \
     $(LOCAL_PATH)/../common
 
-LOCAL_C_INCLUDES += hardware/qcom/media/mm-core/inc
+ifneq ($(TARGET_QCOM_MEDIA_VARIANT),)
+MEDIA := media-$(TARGET_QCOM_MEDIA_VARIANT)
+else
+MEDIA := media
+endif
+
+LOCAL_C_INCLUDES += hardware/qcom/$(MEDIA)/mm-core/inc
 
 LOCAL_CFLAGS += -Wall -Werror
 
