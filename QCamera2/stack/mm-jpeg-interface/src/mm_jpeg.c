@@ -59,6 +59,11 @@
  */
 #define MM_JPEG_MIN_NOM_RESOLUTION 7680000 /*8MP*/
 
+#ifdef MM_JPEG_USE_PIPELINE
+#undef MM_JPEG_CONCURRENT_SESSIONS_COUNT
+#define MM_JPEG_CONCURRENT_SESSIONS_COUNT 1
+#endif
+
 OMX_ERRORTYPE mm_jpeg_ebd(OMX_HANDLETYPE hComponent,
     OMX_PTR pAppData,
     OMX_BUFFERHEADERTYPE* pBuffer);
@@ -1408,8 +1413,10 @@ static OMX_ERRORTYPE mm_jpeg_configure_job_params(
   work_buffer.fd = p_session->work_buffer.p_pmem_fd;
   work_buffer.vaddr = p_session->work_buffer.addr;
   work_buffer.length = (uint32_t)p_session->work_buffer.size;
-  CDBG_ERROR("%s:%d] Work buffer %d %p WorkBufSize: %d", __func__, __LINE__,
+  CDBG_ERROR("%s:%d] Work buffer info %d %p WorkBufSize: %d invalidate", __func__, __LINE__,
     work_buffer.fd, work_buffer.vaddr, work_buffer.length);
+
+  buffer_invalidate(&p_session->work_buffer);
 
   ret = OMX_SetConfig(p_session->omx_handle, work_buffer_index,
     &work_buffer);
@@ -1737,8 +1744,11 @@ static void *mm_jpeg_jobmgr_thread(void *data)
 
     /* check ongoing q size */
     num_ongoing_jobs = mm_jpeg_queue_get_size(&my_obj->ongoing_job_q);
-    if (num_ongoing_jobs >= NUM_MAX_JPEG_CNCURRENT_JOBS) {
-      CDBG("%s:%d] ongoing job already reach max %d", __func__,
+
+    CDBG("%s:%d] ongoing job  %d %d", __func__,
+      __LINE__, num_ongoing_jobs, MM_JPEG_CONCURRENT_SESSIONS_COUNT);
+    if (num_ongoing_jobs >= MM_JPEG_CONCURRENT_SESSIONS_COUNT) {
+      CDBG_ERROR("%s:%d] ongoing job already reach max %d", __func__,
         __LINE__, num_ongoing_jobs);
       continue;
     }
@@ -2121,7 +2131,7 @@ int32_t mm_jpeg_start_job(mm_jpeg_obj *my_obj,
       cam_sem_post(&my_obj->job_mgr.job_sem);
   }
 
-  CDBG_HIGH("%s:%d] X", __func__, __LINE__);
+  CDBG_HIGH("%s:%d] job_id %d X", __func__, __LINE__, *job_id);
 
   return rc;
 }
@@ -2266,7 +2276,7 @@ int32_t mm_jpeg_create_session(mm_jpeg_obj *my_obj,
   if (p_params->burst_mode) {
     num_omx_sessions = MM_JPEG_CONCURRENT_SESSIONS_COUNT;
   }
-  work_bufs_need = my_obj->num_sessions + num_omx_sessions;
+  work_bufs_need = num_omx_sessions;
   if (work_bufs_need > MM_JPEG_CONCURRENT_SESSIONS_COUNT) {
     work_bufs_need = MM_JPEG_CONCURRENT_SESSIONS_COUNT;
   }
@@ -2285,6 +2295,7 @@ int32_t mm_jpeg_create_session(mm_jpeg_obj *my_obj,
      }
      my_obj->work_buf_cnt++;
   }
+
 
   /* init omx handle queue */
   p_session_handle_q = (mm_jpeg_queue_t *) malloc(sizeof(*p_session_handle_q));
@@ -2334,10 +2345,11 @@ int32_t mm_jpeg_create_session(mm_jpeg_obj *my_obj,
     }
     p_prev_session = p_session;
 
-    buf_idx = my_obj->num_sessions + i;
+    buf_idx = i;
     if (buf_idx < MM_JPEG_CONCURRENT_SESSIONS_COUNT) {
       p_session->work_buffer = my_obj->ionBuffer[buf_idx];
     } else {
+      CDBG_ERROR("%s %d: Invalid Index, Setting buffer add to null", __func__, __LINE__);
       p_session->work_buffer.addr = NULL;
       p_session->work_buffer.ion_fd = -1;
       p_session->work_buffer.p_pmem_fd = -1;
@@ -2746,6 +2758,15 @@ OMX_ERRORTYPE mm_jpeg_fbd(OMX_HANDLETYPE hComponent,
     pthread_mutex_unlock(&p_session->lock);
     return ret;
   }
+#ifdef MM_JPEG_DUMP_OUT_BS
+  char filename[256];
+  static int bsc;
+  snprintf(filename, sizeof(filename),
+      QCAMERA_DUMP_FRM_LOCATION"jpeg/mm_jpeg_bs%d.jpg", bsc++);
+  DUMP_TO_FILE(filename,
+    pBuffer->pBuffer,
+    (size_t)(uint32_t)pBuffer->nFilledLen);
+#endif
 
   p_session->fbd_count++;
   if (NULL != p_session->params.jpeg_cb) {
@@ -2753,7 +2774,7 @@ OMX_ERRORTYPE mm_jpeg_fbd(OMX_HANDLETYPE hComponent,
     p_session->job_status = JPEG_JOB_STATUS_DONE;
     output_buf.buf_filled_len = (uint32_t)pBuffer->nFilledLen;
     output_buf.buf_vaddr = pBuffer->pBuffer;
-    output_buf.fd = 0;
+    output_buf.fd = -1;
     CDBG_HIGH("%s:%d] send jpeg callback %d buf 0x%p len %u JobID %u",
       __func__, __LINE__,
       p_session->job_status, pBuffer->pBuffer,

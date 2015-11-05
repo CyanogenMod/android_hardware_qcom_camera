@@ -295,6 +295,7 @@ int QCamera2HardwareInterface::start_preview(struct camera_device *device)
         return BAD_VALUE;
     }
     ALOGI("[KPI Perf] %s: E PROFILE_START_PREVIEW", __func__);
+    hw->m_perfLock.lock_acq();
     hw->lockAPI();
     qcamera_api_result_t apiResult;
     qcamera_sm_evt_enum_t evt = QCAMERA_SM_EVT_START_PREVIEW;
@@ -309,6 +310,7 @@ int QCamera2HardwareInterface::start_preview(struct camera_device *device)
     hw->unlockAPI();
     hw->m_bPreviewStarted = true;
     ALOGI("[KPI Perf] %s: X", __func__);
+    hw->m_perfLock.lock_rel();
     return ret;
 }
 
@@ -332,6 +334,7 @@ void QCamera2HardwareInterface::stop_preview(struct camera_device *device)
         return;
     }
     ALOGI("[KPI Perf] %s: E PROFILE_STOP_PREVIEW", __func__);
+    hw->m_perfLock.lock_acq();
     hw->lockAPI();
     qcamera_api_result_t apiResult;
     int32_t ret = hw->processAPI(QCAMERA_SM_EVT_STOP_PREVIEW, NULL);
@@ -339,6 +342,7 @@ void QCamera2HardwareInterface::stop_preview(struct camera_device *device)
         hw->waitAPIResult(QCAMERA_SM_EVT_STOP_PREVIEW, &apiResult);
     }
     hw->unlockAPI();
+    hw->m_perfLock.lock_rel();
     ALOGI("[KPI Perf] %s: X", __func__);
 }
 
@@ -642,6 +646,9 @@ int QCamera2HardwareInterface::take_picture(struct camera_device *device)
     }
     ALOGI("[KPI Perf] %s: E PROFILE_TAKE_PICTURE", __func__);
     hw->lockAPI();
+    if (!hw->mLongshotEnabled) {
+        hw->m_perfLock.lock_acq();
+    }
     qcamera_api_result_t apiResult;
 
    /** Added support for Retro-active Frames:
@@ -1061,7 +1068,6 @@ QCamera2HardwareInterface::QCamera2HardwareInterface(uint32_t cameraId)
       m_bPreviewStarted(false),
       m_bRecordStarted(false),
       m_currentFocusState(CAM_AF_SCANNING),
-      m_pPowerModule(NULL),
       mDumpFrmCnt(0U),
       mDumpSkipCnt(0U),
       mThermalLevel(QCAMERA_THERMAL_NO_ADJUSTMENT),
@@ -1127,13 +1133,8 @@ QCamera2HardwareInterface::QCamera2HardwareInterface(uint32_t cameraId)
 
     memset(m_BackendFileName, 0, QCAMERA_MAX_FILEPATH_LENGTH);
 
-#ifdef HAS_MULTIMEDIA_HINTS
-    if (hw_get_module(POWER_HARDWARE_MODULE_ID, (const hw_module_t **)&m_pPowerModule)) {
-        ALOGE("%s: %s module not found", __func__, POWER_HARDWARE_MODULE_ID);
-    }
-#endif
-
     memset(mDeffOngoingJobs, 0, sizeof(mDeffOngoingJobs));
+    m_perfLock.lock_init();
 
     mDefferedWorkThread.launch(defferedWorkRoutine, this);
     mDefferedWorkThread.sendCmd(CAMERA_CMD_TYPE_START_DATA_PROC, FALSE, FALSE);
@@ -1153,11 +1154,14 @@ QCamera2HardwareInterface::~QCamera2HardwareInterface()
     mDefferedWorkThread.sendCmd(CAMERA_CMD_TYPE_STOP_DATA_PROC, TRUE, TRUE);
     mDefferedWorkThread.exit();
 
+    m_perfLock.lock_acq();
     lockAPI();
     m_smThreadActive = false;
     unlockAPI();
     m_stateMachine.releaseThread();
     closeCamera();
+    m_perfLock.lock_rel();
+    m_perfLock.lock_deinit();
     pthread_mutex_destroy(&m_lock);
     pthread_cond_destroy(&m_cond);
     pthread_mutex_destroy(&m_evtLock);
@@ -1189,6 +1193,7 @@ int QCamera2HardwareInterface::openCamera(struct hw_device_t **hw_device)
     }
     ALOGI("[KPI Perf] %s: E PROFILE_OPEN_CAMERA camera id %d",
         __func__,mCameraId);
+    m_perfLock.lock_acq();
     rc = openCamera();
     if (rc == NO_ERROR){
         *hw_device = &mCameraDevice.common;
@@ -1202,6 +1207,7 @@ int QCamera2HardwareInterface::openCamera(struct hw_device_t **hw_device)
     ALOGI("[KPI Perf] %s: X PROFILE_OPEN_CAMERA camera id %d, rc: %d",
         __func__,mCameraId, rc);
 
+    m_perfLock.lock_rel();
     return rc;
 }
 
@@ -1223,15 +1229,16 @@ int QCamera2HardwareInterface::openCamera()
     m_max_pic_width = 0;
     m_max_pic_height = 0;
     size_t i;
+    int32_t rc = 0;
 
     if (mCameraHandle) {
         ALOGE("Failure: Camera already opened");
         return ALREADY_EXISTS;
     }
-    mCameraHandle = camera_open((uint8_t)mCameraId);
-    if (!mCameraHandle) {
-        ALOGE("camera_open failed.");
-        return UNKNOWN_ERROR;
+    rc = camera_open((uint8_t)mCameraId, &mCameraHandle);
+    if (rc) {
+        ALOGE("camera_open failed. rc = %d, mCameraHandle = %p", rc, mCameraHandle);
+        return rc;
     }
     if (NULL == gCamCaps[mCameraId])
         initCapabilities(mCameraId,mCameraHandle);
@@ -1253,7 +1260,7 @@ int QCamera2HardwareInterface::openCamera()
       }
     }
 
-    int32_t rc = m_postprocessor.init(jpegEvtHandle, this);
+    rc = m_postprocessor.init(jpegEvtHandle, this);
     if (rc != 0) {
         ALOGE("Init Postprocessor failed");
         mCameraHandle->ops->close_camera(mCameraHandle->camera_handle);
@@ -1447,6 +1454,22 @@ int QCamera2HardwareInterface::getCapabilities(uint32_t cameraId,
     memcpy(info, p_info, sizeof (struct camera_info));
     pthread_mutex_unlock(&g_camlock);
     return rc;
+}
+
+/*===========================================================================
+ * FUNCTION   : getCamHalCapabilities
+ *
+ * DESCRIPTION: get the HAL capabilities structure
+ *
+ * PARAMETERS :
+ *   @cameraId  : camera Id
+ *
+ * RETURN     : capability structure of respective camera
+ *
+ *==========================================================================*/
+cam_capability_t* QCamera2HardwareInterface::getCamHalCapabilities()
+{
+    return gCamCaps[mCameraId];
 }
 
 /*===========================================================================
@@ -2334,15 +2357,11 @@ int QCamera2HardwareInterface::startRecording()
         rc = startChannel(QCAMERA_CH_TYPE_VIDEO);
     }
 
-#ifdef HAS_MULTIMEDIA_HINTS
     if (rc == NO_ERROR) {
-        if (m_pPowerModule) {
-            if (m_pPowerModule->powerHint) {
-                m_pPowerModule->powerHint(m_pPowerModule, POWER_HINT_VIDEO_ENCODE, (void *)"state=1");
-            }
-        }
+        // Set power Hint for video encoding
+        m_perfLock.powerHint(POWER_HINT_VIDEO_ENCODE, 1);
     }
-#endif
+
     CDBG_HIGH("%s: X", __func__);
     return rc;
 }
@@ -2363,13 +2382,10 @@ int QCamera2HardwareInterface::stopRecording()
     CDBG_HIGH("%s: E", __func__);
     int rc = stopChannel(QCAMERA_CH_TYPE_VIDEO);
 
-#ifdef HAS_MULTIMEDIA_HINTS
-    if (m_pPowerModule) {
-        if (m_pPowerModule->powerHint) {
-            m_pPowerModule->powerHint(m_pPowerModule, POWER_HINT_VIDEO_ENCODE, (void *)"state=0");
-        }
+    if (rc == NO_ERROR) {
+        // Disable power Hint
+        m_perfLock.powerHint(POWER_HINT_VIDEO_ENCODE, 0);
     }
-#endif
     CDBG_HIGH("%s: X", __func__);
     return rc;
 }
@@ -2971,6 +2987,10 @@ int QCamera2HardwareInterface::takePicture()
     uint8_t numRetroSnapshots = mParameters.getNumOfRetroSnapshots();
     CDBG_HIGH("%s: E", __func__);
 
+    //Set rotation value from user settings as Jpeg rotation
+    //to configure back-end modules.
+    mParameters.setJpegRotation(mParameters.getRotation());
+
     // Check if retro-active snapshots are not enabled
     if (!isRetroPicture() || !mParameters.isZSLMode()) {
       numRetroSnapshots = 0;
@@ -3371,6 +3391,10 @@ int QCamera2HardwareInterface::cancelPicture()
 
     mParameters.setDisplayFrame(TRUE);
 
+    if (!mLongshotEnabled) {
+        m_perfLock.lock_rel();
+    }
+
     if (mParameters.isZSLMode()) {
         QCameraPicChannel *pZSLChannel =
             (QCameraPicChannel *)m_channels[QCAMERA_CH_TYPE_ZSL];
@@ -3603,6 +3627,10 @@ int QCamera2HardwareInterface::takeBackendPic_internal(bool *JpegMemOpt, char *r
     qcamera_api_result_t apiResult;
 
     lockAPI();
+    //Set rotation value from user settings as Jpeg rotation
+    //to configure back-end modules.
+    mParameters.setJpegRotation(mParameters.getRotation());
+
     setRetroPicture(0);
     /* Prepare snapshot in case LED needs to be flashed */
     if (mFlashNeeded == 1 || mParameters.isChromaFlashEnabled()) {
@@ -3724,6 +3752,10 @@ int QCamera2HardwareInterface::takeLiveSnapshot_internal()
 
     QCameraChannel *pChannel = NULL;
 
+    //Set rotation value from user settings as Jpeg rotation
+    //to configure back-end modules.
+    mParameters.setJpegRotation(mParameters.getRotation());
+
     // Configure advanced capture
     if (mParameters.isUbiFocusEnabled() ||
             mParameters.isUbiRefocus() ||
@@ -3819,6 +3851,9 @@ int QCamera2HardwareInterface::cancelLiveSnapshot()
     int rc = NO_ERROR;
 
     unconfigureAdvancedCapture();
+    if (!mLongshotEnabled) {
+        m_perfLock.lock_rel();
+    }
 
     if (mLiveSnapshotThread != 0) {
         pthread_join(mLiveSnapshotThread,NULL);
@@ -3926,6 +3961,7 @@ int QCamera2HardwareInterface::sendCommand(int32_t command,
     switch (command) {
 #ifndef VANILLA_HAL
     case CAMERA_CMD_LONGSHOT_ON:
+        m_perfLock.lock_acq();
         arg1 = 0;
         // Longshot can only be enabled when image capture
         // is not active.
@@ -3968,6 +4004,7 @@ int QCamera2HardwareInterface::sendCommand(int32_t command,
         }
         break;
     case CAMERA_CMD_LONGSHOT_OFF:
+        m_perfLock.lock_rel();
         if ( mLongshotEnabled && m_stateMachine.isCaptureRunning() ) {
             cancelPicture();
             processEvt(QCAMERA_SM_EVT_SNAPSHOT_DONE, NULL);
@@ -7281,6 +7318,8 @@ QCameraExif *QCamera2HardwareInterface::getExifData()
         ALOGE("%s: getExifGpsDataTimeStamp failed", __func__);
     }
 
+#ifdef ENABLE_MODEL_INFO_EXIF
+
     char value[PROPERTY_VALUE_MAX];
     if (property_get("ro.product.manufacturer", value, "QCOM-AA") > 0) {
         exif->addEntry(EXIFTAGID_MAKE, EXIF_ASCII,
@@ -7302,6 +7341,8 @@ QCameraExif *QCamera2HardwareInterface::getExifData()
     } else {
         ALOGE("%s: getExifSoftware failed", __func__);
     }
+
+#endif
 
     if (mParameters.useJpegExifRotation()) {
         int16_t orientation;

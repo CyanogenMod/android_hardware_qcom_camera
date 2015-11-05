@@ -170,6 +170,8 @@ typedef struct{
        raw resolution */
     int64_t raw_min_duration[MAX_SIZES_CNT];
 
+    /* 3A version*/
+    cam_q3a_version_t q3a_version;
     /* supported focus algorithms */
     size_t supported_focus_algos_cnt;
     cam_focus_algorithm_type supported_focus_algos[CAM_FOCUS_ALGO_MAX];
@@ -375,6 +377,9 @@ typedef struct{
     /* Analysis recommended size */
     cam_dimension_t analysis_recommended_res;
 
+    /* Analysis recommended format */
+    cam_format_t analysis_recommended_format;
+
     /* This is set to 'true' if sensor cannot guarantee per frame control */
     /* Default value of this capability is 'false' indicating per-frame */
     /* control is supported */
@@ -390,6 +395,19 @@ typedef struct{
 
     /* Max cpp batch size */
     uint8_t max_batch_bufs_supported;
+    uint8_t flash_dev_name[QCAMERA_MAX_FILEPATH_LENGTH];
+    uint8_t eeprom_version_info[MAX_EEPROM_VERSION_INFO_LEN];
+
+    /* maximum pixel bandwidth shared between cameras */
+    uint64_t max_pixel_bandwidth;
+
+    /* Array of K integers, where K%4==0,
+      as a list of rectangles in the pixelArray co-ord system
+      left, top, right, bottom */
+    int32_t optical_black_regions[MAX_OPTICAL_BLACK_REGIONS * 4];
+    /* Count is K/4 */
+    uint8_t optical_black_region_count;
+
 } cam_capability_t;
 
 typedef enum {
@@ -570,6 +588,7 @@ typedef struct {
     INCLUDE(CAM_INTF_META_HISTOGRAM,                    cam_hist_stats_t,               1);
     INCLUDE(CAM_INTF_META_FACE_DETECTION,               cam_face_detection_data_t,      1);
     INCLUDE(CAM_INTF_META_AUTOFOCUS_DATA,               cam_auto_focus_data_t,          1);
+    INCLUDE(CAM_INTF_META_CDS_DATA,                     cam_cds_data_t,                 1);
     INCLUDE(CAM_INTF_PARM_UPDATE_DEBUG_LEVEL,           uint32_t,                       1);
 
     /* Specific to HAl1 */
@@ -624,6 +643,7 @@ typedef struct {
     INCLUDE(CAM_INTF_META_LENS_FOCUS_RANGE,             float,                       2);
     INCLUDE(CAM_INTF_META_LENS_STATE,                   cam_af_lens_state_t,         1);
     INCLUDE(CAM_INTF_META_LENS_OPT_STAB_MODE,           uint32_t,                    1);
+    INCLUDE(CAM_INTF_META_VIDEO_STAB_MODE,              uint32_t,                    1);
     INCLUDE(CAM_INTF_META_LENS_FOCUS_STATE,             uint32_t,                    1);
     INCLUDE(CAM_INTF_META_NOISE_REDUCTION_MODE,         uint32_t,                    1);
     INCLUDE(CAM_INTF_META_NOISE_REDUCTION_STRENGTH,     uint32_t,                    1);
@@ -760,6 +780,9 @@ typedef struct {
     INCLUDE(CAM_INTF_PARM_FLIP,                         int32_t,                     1);
     INCLUDE(CAM_INTF_META_USE_AV_TIMER,                 uint8_t,                     1);
     INCLUDE(CAM_INTF_META_EFFECTIVE_EXPOSURE_FACTOR,    float,                       1);
+    INCLUDE(CAM_INTF_META_LDAF_EXIF,                    uint32_t,                    2);
+    INCLUDE(CAM_INTF_META_BLACK_LEVEL_SOURCE_PATTERN,   cam_black_level_metadata_t,  1);
+    INCLUDE(CAM_INTF_META_BLACK_LEVEL_APPLIED_PATTERN,  cam_black_level_metadata_t,  1);
 } metadata_data_t;
 
 /* Update clear_metadata_buffer() function when a new is_xxx_valid is added to

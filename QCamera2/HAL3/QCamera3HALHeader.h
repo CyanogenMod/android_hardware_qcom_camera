@@ -41,6 +41,9 @@ namespace qcamera {
 #define MAX(a, b) ((a) > (b) ? (a) : (b))
 #define MIN(a, b) ((a) < (b) ? (a) : (b))
 
+#define IS_USAGE_ZSL(usage)  (((usage) & (GRALLOC_USAGE_HW_CAMERA_ZSL)) \
+        == (GRALLOC_USAGE_HW_CAMERA_ZSL))
+
 class QCamera3Channel;
 class QCamera3ProcessingChannel;
 
@@ -68,6 +71,8 @@ class QCamera3ProcessingChannel;
         uint8_t gps_coordinates_valid;
         double gps_coordinates[3];
         char gps_processing_method[GPS_PROCESSING_METHOD_SIZE];
+        uint8_t image_desc_valid;
+        char image_desc[EXIF_IMAGE_DESCRIPTION_SIZE];
     } jpeg_settings_t;
 
     typedef struct {

@@ -31,7 +31,6 @@
 #define __QCAMERA2HARDWAREINTERFACE_H__
 
 #include <hardware/camera.h>
-#include <hardware/power.h>
 #include <utils/Log.h>
 #include <utils/Mutex.h>
 #include <utils/Condition.h>
@@ -46,6 +45,7 @@
 #include "QCameraPostProc.h"
 #include "QCameraThermalAdapter.h"
 #include "QCameraMem.h"
+#include "QCameraPerf.h"
 
 extern "C" {
 #include <mm_camera_interface.h>
@@ -247,6 +247,7 @@ public:
 
     static int getCapabilities(uint32_t cameraId, struct camera_info *info);
     static int initCapabilities(uint32_t cameraId, mm_camera_vtbl_t *cameraHandle);
+    cam_capability_t *getCamHalCapabilities();
 
     // Implementation of QCameraAllocator
     virtual QCameraMemory *allocateStreamBuf(cam_stream_type_t stream_type,
@@ -523,6 +524,7 @@ private:
     QCameraPostProcessor m_postprocessor; // post processor
     QCameraThermalAdapter &m_thermalAdapter;
     QCameraCbNotifier m_cbNotifier;
+    QCameraPerfLock m_perfLock;
     pthread_mutex_t m_lock;
     pthread_cond_t m_cond;
     api_result_list *m_apiResultList;
@@ -544,8 +546,6 @@ private:
     // Signifies AEC locked during zsl snapshots
     bool m_bLedAfAecLock;
     cam_autofocus_state_t m_currentFocusState;
-
-    power_module_t *m_pPowerModule;   // power module
 
     uint32_t mDumpFrmCnt;  // frame dump count
     uint32_t mDumpSkipCnt; // frame skip count

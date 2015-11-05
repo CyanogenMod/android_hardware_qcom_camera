@@ -37,11 +37,11 @@
 
 #define CAM_MAX_NUM_BUFS_PER_STREAM 64
 #define MAX_METADATA_PRIVATE_PAYLOAD_SIZE_IN_BYTES 8096
-#define AWB_DEBUG_DATA_SIZE               (7029)
-#define AEC_DEBUG_DATA_SIZE               (1720)
-#define AF_DEBUG_DATA_SIZE                (652)
+#define AWB_DEBUG_DATA_SIZE               (69189)
+#define AEC_DEBUG_DATA_SIZE               (3921)
+#define AF_DEBUG_DATA_SIZE                (8487)
 #define ASD_DEBUG_DATA_SIZE               (100)
-#define STATS_BUFFER_DEBUG_DATA_SIZE      (74756)
+#define STATS_BUFFER_DEBUG_DATA_SIZE      (74773)
 
 #define CEILING64(X) (((X) + 0x0003F) & 0xFFFFFFC0)
 #define CEILING32(X) (((X) + 0x0001F) & 0xFFFFFFE0)
@@ -53,7 +53,7 @@
 #define MAX_SIZES_CNT 30
 #define MAX_EXP_BRACKETING_LENGTH 32
 #define MAX_ROI 5
-#define MAX_STREAM_NUM_IN_BUNDLE 6
+#define MAX_STREAM_NUM_IN_BUNDLE 8
 #define MAX_NUM_STREAMS          8
 #define CHROMATIX_SIZE 60000
 #define COMMONCHROMATIX_SIZE 45000
@@ -101,10 +101,20 @@
 #define MAX_TEST_PATTERN_CNT     8
 
 #define GPS_PROCESSING_METHOD_SIZE 33
+#define EXIF_IMAGE_DESCRIPTION_SIZE 100
 
 #define MAX_INFLIGHT_REQUESTS  6
+#define MAX_INFLIGHT_BLOB      2
+
+#ifdef OPTIMIZE_BUF_COUNT
+#undef MAX_INFLIGHT_BLOB
+#define MAX_INFLIGHT_BLOB      1
+#endif
+
 #define MIN_INFLIGHT_REQUESTS  3
 #define MAX_INFLIGHT_REPROCESS_REQUESTS 1
+#define MAX_INFLIGHT_HFR_REQUESTS (48)
+#define MIN_INFLIGHT_HFR_REQUESTS (40)
 
 #define QCAMERA_DUMP_FRM_LOCATION "/data/misc/camera/"
 #define QCAMERA_MAX_FILEPATH_LENGTH 64
@@ -114,6 +124,15 @@
 #define UNLIKELY(x)     __builtin_expect((x), false)
 
 #define MAX_REPROCESS_STALL 2
+
+#define QCAMERA_MAX_FILEPATH_LENGTH 64
+
+#define MAX_EEPROM_VERSION_INFO_LEN 32
+
+#define MAX_OPTICAL_BLACK_REGIONS 5
+
+/*reprocess pipeline stages are pproc and jpeg */
+#define MAX_REPROCESS_PIPELINE_STAGES 2
 
 typedef enum {
     CAM_HAL_V1 = 1,
@@ -149,10 +168,6 @@ typedef enum {
     CAM_FORMAT_YUV_422_NV16,
     CAM_FORMAT_YUV_422_NV61,
     CAM_FORMAT_YUV_420_NV12_VENUS,
-
-    /* Please note below are the defintions for raw image.
-     * Any format other than raw image format should be declared
-     * before this line!!!!!!!!!!!!! */
 
     /* Note: For all raw formats, each scanline needs to be 16 bytes aligned */
 
@@ -294,6 +309,9 @@ typedef enum {
 
     CAM_FORMAT_YUV_444_NV24,
     CAM_FORMAT_YUV_444_NV42,
+
+    /* Y plane only, used for FD */
+    CAM_FORMAT_Y_ONLY,
 
     CAM_FORMAT_MAX
 } cam_format_t;
@@ -681,7 +699,8 @@ typedef enum {
 
 typedef enum {
     CAM_AEC_TRIGGER_IDLE,
-    CAM_AEC_TRIGGER_START
+    CAM_AEC_TRIGGER_START,
+    CAM_AEC_TRIGGER_CANCEL
 } cam_aec_trigger_type_t;
 
 typedef enum {
@@ -703,13 +722,15 @@ typedef enum {
     CAM_NOISE_REDUCTION_MODE_OFF,
     CAM_NOISE_REDUCTION_MODE_FAST,
     CAM_NOISE_REDUCTION_MODE_HIGH_QUALITY,
-    CAM_NOISE_REDUCTION_MODE_MINIMAL
+    CAM_NOISE_REDUCTION_MODE_MINIMAL,
+    CAM_NOISE_REDUCTION_MODE_ZERO_SHUTTER_LAG
 } cam_noise_reduction_mode_t;
 
 typedef enum {
     CAM_EDGE_MODE_OFF,
     CAM_EDGE_MODE_FAST,
     CAM_EDGE_MODE_HIGH_QUALITY,
+    CAM_EDGE_MODE_ZERO_SHUTTER_LAG,
 } cam_edge_mode_t;
 
 typedef struct {
@@ -721,6 +742,12 @@ typedef enum {
     CAM_BLACK_LEVEL_LOCK_OFF,
     CAM_BLACK_LEVEL_LOCK_ON,
 } cam_black_level_lock_t;
+
+typedef enum {
+    CAM_HOTPIXEL_MODE_OFF,
+    CAM_HOTPIXEL_MODE_FAST,
+    CAM_HOTPIXEL_MODE_HIGH_QUALITY,
+} cam_hotpixel_mode_t;
 
 typedef enum {
     CAM_LENS_SHADING_MAP_MODE_OFF,
@@ -1146,6 +1173,17 @@ typedef struct {
     cam_stream_crop_info_t crop_info[MAX_NUM_STREAMS];
 } cam_crop_data_t;
 
+typedef struct {
+    uint32_t stream_id;
+    uint32_t cds_enable;
+} cam_stream_cds_info_t;
+
+typedef struct {
+    uint8_t session_cds_enable;
+    uint8_t num_of_streams;
+    cam_stream_cds_info_t cds_info[MAX_NUM_STREAMS];
+} cam_cds_data_t;
+
 typedef enum {
     DO_NOT_NEED_FUTURE_FRAME,
     NEED_FUTURE_FRAME,
@@ -1225,6 +1263,7 @@ typedef struct {
 } cam_3a_params_t;
 
 typedef struct {
+    uint64_t sw_version_number;
     int32_t aec_debug_data_size;
     char aec_private_debug_data[AEC_DEBUG_DATA_SIZE];
 } cam_ae_exif_debug_t;
@@ -1241,6 +1280,10 @@ typedef struct {
 
 typedef struct {
     int32_t af_debug_data_size;
+    int32_t haf_debug_data_size;
+    int32_t tof_debug_data_size;
+    int32_t dciaf_debug_data_size;
+    int32_t pdaf_debug_data_size;
     char af_private_debug_data[AF_DEBUG_DATA_SIZE];
 } cam_af_exif_debug_t;
 
@@ -1252,8 +1295,17 @@ typedef struct {
 typedef struct {
     int32_t bg_stats_buffer_size;
     int32_t bhist_stats_buffer_size;
+    int32_t bg_config_buffer_size;
     char stats_buffer_private_debug_data[STATS_BUFFER_DEBUG_DATA_SIZE];
 } cam_stats_buffer_exif_debug_t;
+
+/* 3A version*/
+typedef struct {
+    uint16_t major_version;
+    uint16_t minor_version;
+    uint16_t patch_version;
+    uint16_t new_feature_des;
+} cam_q3a_version_t;
 
 typedef struct {
     uint32_t tuning_data_version;
@@ -1436,7 +1488,6 @@ typedef enum {
     CAM_INTF_META_FACE_DETECTION,
     /* Whether optical image stabilization is enabled. */
     CAM_INTF_META_LENS_OPT_STAB_MODE,
-
     /* specific to HAl1 */
     CAM_INTF_META_AUTOFOCUS_DATA,
     CAM_INTF_PARM_QUERY_FLASH4SNAP,
@@ -1714,6 +1765,15 @@ typedef enum {
     CAM_INTF_META_USE_AV_TIMER,
 
     CAM_INTF_META_EFFECTIVE_EXPOSURE_FACTOR,
+
+    /*Black level parameters*/
+    CAM_INTF_META_LDAF_EXIF,
+    CAM_INTF_META_BLACK_LEVEL_SOURCE_PATTERN,
+    CAM_INTF_META_BLACK_LEVEL_APPLIED_PATTERN,
+    CAM_INTF_META_CDS_DATA,
+
+    /* Whether EIS is enabled */
+    CAM_INTF_META_VIDEO_STAB_MODE,
     CAM_INTF_PARM_MAX
 } cam_intf_parm_type_t;
 
@@ -1728,6 +1788,10 @@ typedef struct {
       float    force_snap_gain_value;
     } u;
 } cam_ez_force_params_t;
+
+typedef struct {
+    float cam_black_level[4];
+} cam_black_level_metadata_t;
 
 typedef enum {
     CAM_EZTUNE_CMD_STATUS,
@@ -1926,7 +1990,8 @@ typedef struct {
 #define CAM_QCOM_FEATURE_LLVD           (1U<<20)
 #define CAM_QCOM_FEATURE_DIS20          (1U<<21)
 #define CAM_QCOM_FEATURE_STILLMORE      (1U<<22)
-#define CAM_QCOM_FEATURE_MAX            (1U<<23)
+#define CAM_QCOM_FEATURE_CDS            (1U<<23)
+#define CAM_QCOM_FEATURE_MAX            (1U<<24)
 #define CAM_QCOM_FEATURE_PP_SUPERSET    (CAM_QCOM_FEATURE_DENOISE2D|CAM_QCOM_FEATURE_CROP|\
                                          CAM_QCOM_FEATURE_ROTATION|CAM_QCOM_FEATURE_SHARPNESS|\
                                          CAM_QCOM_FEATURE_SCALE|CAM_QCOM_FEATURE_CAC)
